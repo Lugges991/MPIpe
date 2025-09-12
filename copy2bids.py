@@ -50,7 +50,6 @@ python copy2bids.py \
     --method link            # copy|link|symlink
 ```
 """
-from __future__ import annotations
 
 import argparse
 import json
@@ -58,7 +57,7 @@ import os
 import shutil
 import sys
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 try:
     import yaml  # type: ignore
