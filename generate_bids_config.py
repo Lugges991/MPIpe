@@ -32,7 +32,6 @@ python generate_bids_config.py \
 
 Add `--no-prompt` to skip the confirmation question.
 """
-from __future__ import annotations
 
 import argparse
 import itertools
@@ -54,13 +53,13 @@ GUESS_RULES = {
     },
     "func": {
         # Detects BOLD fMRI series. Task and run are parsed later.
-        "bold": re.compile(r"(?i)bold")
+        "bold": re.compile(r"(?i)(bold|ep3d|3DbSSFP)")
     },
     "fmap": {
-        "gre": re.compile(r"(?i)(field|gre)")
+        "gre": re.compile(r"(?i)(field|gre|revPE)")
     },
 }
-
+~
 SKIP_PATTERNS = re.compile(r"(?i)(localizer|scout)")
 SBREF_PAT = re.compile(r"SBRef", re.I)
 

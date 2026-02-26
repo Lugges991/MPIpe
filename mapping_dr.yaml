@@ -1,0 +1,16 @@
+ses-02:
+  anat:
+    T1w:
+    - 00005_db_MPRAGE_0p60_UP_opt_prot
+  func:
+    prf:
+      run-01:
+        bssfp: 00011_3DbSSFP_TR4206ms_B1vol_run01
+        epi: 00012_dzne_ep3d_TR4200ms_B1vol_run01
+      run-02:
+        bssfp: 00019_3DbSSFP_TR4206ms_B1vol_run02
+        epi: 00020_dzne_ep3d_TR4200ms_B1vol_run02
+  fmap:
+    dir:
+      PA: 00013_dzne_ep3d_TR4200ms_B1vol_revPE
+      b1map: 00017_tfl_b1map_2mm_B1vol
