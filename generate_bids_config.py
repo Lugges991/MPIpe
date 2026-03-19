@@ -65,7 +65,7 @@ RULES_FILES = {
 # folders mode
 RULES_FOLDERS = {
     "anat": {
-        "T1w": re.compile(r"(?i)(MPRAGE|T1|anatomical)"),
+        "T1w": re.compile(r"(?i)(MPRAGE|T1|ADNI|anatomical)"),
     },
     "func": {
         "epi":   re.compile(r"(?i)(ep3d|epi|bold)"),
@@ -74,11 +74,13 @@ RULES_FOLDERS = {
     "fmap": {
         "epi_rev": re.compile(r"(?i)(revPE|reversed|topup|PA)"),
         "b1map":   re.compile(r"(?i)b1map"),
+        "gre":     re.compile(r"(?i)(gre_field|field_map)"),
     },
 }
 
 SKIP_FILES   = re.compile(r"(?i)(localizer|scout)")
 SKIP_FOLDERS = re.compile(r"(?i)(localizer|scout|B0_Map|aa_B0Mapping|replaced_|test)")
+SBREF_FOLDERS = re.compile(r"SBRef", re.I)
 SBREF_PAT    = re.compile(r"SBRef", re.I)
 
 # -- Utilities ----------------------------------------------------------------
@@ -231,10 +233,14 @@ def categorise_folders(folders: List[Path], task_name: str = "task", session_id:
     mapping: Dict = {ses_key: {}}
     epi_run = bssfp_run = 0
 
+    gre_run = 0
     for folder in folders:
         name = folder.name
 
         if SKIP_FOLDERS.search(name):
+            continue
+
+        if SBREF_FOLDERS.search(name):
             continue
 
         # anatomical
@@ -248,6 +254,11 @@ def categorise_folders(folders: List[Path], task_name: str = "task", session_id:
             continue
         if RULES_FOLDERS["fmap"]["b1map"].search(name):
             mapping[ses_key].setdefault("fmap", {}).setdefault("dir", {})["b1map"] = name
+            continue
+        if RULES_FOLDERS["fmap"]["gre"].search(name):
+            gre_run += 1
+            key = f"e{gre_run}"
+            mapping[ses_key].setdefault("fmap", {}).setdefault("gre", {})[key] = name
             continue
 
         # functional - bSSFP before EPI to avoid broad EPI pattern stealing bSSFP series
