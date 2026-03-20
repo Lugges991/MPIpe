@@ -46,6 +46,7 @@ python copy2bids.py \\
 """
 
 import argparse
+import csv
 import json
 import os
 import shutil
@@ -288,6 +289,21 @@ def run_folders_mode(args, subject: str, session: str, mapping: Dict):
                 dst = args.dest / f"sub-{subject}" / ses_dir / "fmap" / build_dest_name(subject, session, bids_suffix, ".json")
                 write_fmap_json_with_metadata(jf, dst, key, args.method, args.dry)
 
+# -- Sessions map lookup -------------------------------------------------------
+
+def lookup_session(sessions_map: Path, scanner_id: str) -> dict:
+    """Return the sessions_map row for a given scanner pseudonym.
+
+    Returns a dict with keys: participant_id, session_id, scanner_id, beh_id.
+    Exits with an error message if the scanner_id is not found.
+    """
+    with sessions_map.open() as f:
+        for row in csv.DictReader(f, delimiter="\t"):
+            if row.get("scanner_id", "").strip() == scanner_id.strip():
+                return row
+    sys.exit(f"Error: scanner_id '{scanner_id}' not found in {sessions_map}")
+
+
 # -- CLI ----------------------------------------------------------------------
 
 def main():  # noqa: C901
@@ -302,6 +318,10 @@ def main():  # noqa: C901
     p.add_argument("--method", choices=["copy", "link", "symlink"], default="copy")
     p.add_argument("--events-dir", type=Path, help="[files] Folder with *_events.tsv files")
     p.add_argument("--dry", action="store_true", help="Dry-run: print actions without writing")
+    p.add_argument("--sessions-map", type=Path,
+                   help="Path to code/sessions_map.tsv; resolves --subject/--session from --scanner-id")
+    p.add_argument("--scanner-id",
+                   help="Scanner pseudonym (e.g. TYCM-RTYX); looked up in --sessions-map")
     args = p.parse_args()
 
     if not args.source.is_dir():
@@ -310,6 +330,16 @@ def main():  # noqa: C901
         sys.exit(f"Config file not found: {args.config}")
     if args.events_dir and not args.events_dir.is_dir():
         sys.exit(f"Events directory not found: {args.events_dir}")
+    if args.sessions_map and not args.sessions_map.is_file():
+        sys.exit(f"sessions_map not found: {args.sessions_map}")
+
+    # Resolve subject/session from sessions_map when scanner_id is given
+    if args.sessions_map and args.scanner_id:
+        entry = lookup_session(args.sessions_map, args.scanner_id)
+        if not args.subject:
+            args.subject = entry["participant_id"]
+        if args.session == "01":  # only override the default, not an explicit --session
+            args.session = entry["session_id"]
 
     # Normalise subject / session (strip any sub-/ses- prefix users might add)
     subject = (args.subject or args.source.name).removeprefix("sub-")

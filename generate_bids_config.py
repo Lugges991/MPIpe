@@ -298,6 +298,10 @@ def main():  # noqa: C901
     p.add_argument("--session", default="01", help="[folders] Session ID used as mapping key [01]")
     p.add_argument("--dedup", action="store_true",
                    help="[folders] Deduplicate: keep only the highest-numbered folder per name suffix (for aborted+repeated scans)")
+    p.add_argument("--subject",
+                   help="[folders] BIDS subject label (without sub-); used with --out-dir for auto-naming")
+    p.add_argument("--out-dir", type=Path,
+                   help="[folders] Write to <out-dir>/sub-{subject}_ses-{session}_mapping.yaml (overrides --out)")
     args = p.parse_args()
 
     if not args.source.is_dir():
@@ -317,14 +321,23 @@ def main():  # noqa: C901
     print(f"\nProposed mapping [{mode_label}]:\n")
     print(yaml_str)
 
+    # Resolve output path
+    if args.out_dir and args.subject:
+        sub = args.subject.removeprefix("sub-")
+        ses = args.session.removeprefix("ses-")
+        out_path = args.out_dir / f"sub-{sub}_ses-{ses}_mapping.yaml"
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+    else:
+        out_path = args.out
+
     if not args.no_prompt:
-        ans = input(f"Write mapping to {args.out.resolve()}? [Y/n] ")
+        ans = input(f"Write mapping to {out_path.resolve()}? [Y/n] ")
         if ans.strip().lower() not in ("", "y", "yes"):
             print("Aborted - no file written.")
             sys.exit(0)
 
-    args.out.write_text(yaml_str)
-    print(f"\n[OK] Mapping saved to {args.out.resolve()}.\n   Review/edit if necessary, then run copy2bids.py --config {args.out}\n")
+    out_path.write_text(yaml_str)
+    print(f"\n[OK] Mapping saved to {out_path.resolve()}.\n   Review/edit if necessary, then run copy2bids.py --config {out_path}\n")
 
 
 if __name__ == "__main__":
