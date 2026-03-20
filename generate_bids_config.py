@@ -72,7 +72,7 @@ RULES_FOLDERS = {
         "bssfp": re.compile(r"(?i)(3DbSSFP|bssfp|ssfp)"),
     },
     "fmap": {
-        "epi_rev": re.compile(r"(?i)(revPE|reversed|topup|PA)"),
+        "epi_rev": re.compile(r"(?i)(revPE|reversed|topup|\bPA\b)"),
         "b1map":   re.compile(r"(?i)b1map"),
         "gre":     re.compile(r"(?i)(gre_field|field_map)"),
     },
@@ -221,10 +221,12 @@ def deduplicate_folders(folders: List[Path]) -> List[Path]:
     return result
 
 
-def scan_folders(source: Path) -> List[Path]:
-    """Return immediate subdirectories sorted naturally, with duplicates removed."""
+def scan_folders(source: Path, dedup: bool = False) -> List[Path]:
+    """Return immediate subdirectories sorted naturally."""
     folders = [p for p in source.iterdir() if p.is_dir()]
-    return sorted(deduplicate_folders(folders), key=lambda p: natural_sort_key(p.name))
+    if dedup:
+        folders = deduplicate_folders(folders)
+    return sorted(folders, key=lambda p: natural_sort_key(p.name))
 
 
 def categorise_folders(folders: List[Path], task_name: str = "task", session_id: str = "01") -> Dict:
@@ -294,6 +296,8 @@ def main():  # noqa: C901
     # folders-mode options
     p.add_argument("--task", default="task", help="[folders] Task name for functional data [task]")
     p.add_argument("--session", default="01", help="[folders] Session ID used as mapping key [01]")
+    p.add_argument("--dedup", action="store_true",
+                   help="[folders] Deduplicate: keep only the highest-numbered folder per name suffix (for aborted+repeated scans)")
     args = p.parse_args()
 
     if not args.source.is_dir():
@@ -305,7 +309,7 @@ def main():  # noqa: C901
         apply_task_renames(mapping, renames)
         mode_label = "files"
     else:
-        mapping = categorise_folders(scan_folders(args.source), task_name=args.task, session_id=args.session)
+        mapping = categorise_folders(scan_folders(args.source, dedup=args.dedup), task_name=args.task, session_id=args.session)
         mode_label = f"folders (ses-{args.session}, task: {args.task})"
 
     yaml_str = yaml.safe_dump(dict(mapping), sort_keys=False, default_flow_style=False)
