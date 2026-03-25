@@ -1,0 +1,15 @@
+# events_config.yaml
+# Maps source run numbers (from s{NR}r{NN}{cond}_events.tsv filenames) to BIDS run numbers.
+# Edit this file to exclude non-MRI runs (training, calibration, practice, etc.).
+# Only runs listed here will be copied; all others are silently skipped.
+
+task: nrbr
+
+runs:
+  "04": "01"
+  "05": "02"
+  "06": "03"
+  "07": "04"
+  "08": "05"
+  "09": "06"
+  "10": "07"
