@@ -68,8 +68,10 @@ python generate_bids_config.py \
   --csv NRBR_subject_list.csv \
   --source-base /data/raw \
   --out-dir /data/BIDS/code/mappings \
-  --mode folders --task prf --session 01 --dedup
+  --mode folders --task prf --session 01
 ```
+
+Add `--dedup` only if a scan was aborted and restarted — it drops the lower-numbered copy of any pair with an identical series name. **Do not use it when multiple runs of the same protocol were acquired intentionally** (they share the same base name and would be collapsed to one).
 
 Subjects whose source directory is missing are skipped with a `[WARN]` message.
 Subjects with a `Comments` field are processed normally but flagged with `[NOTE: ...]` in the output.
@@ -130,7 +132,7 @@ python generate_bids_config.py \
 | `--task NAME` | folders | Task name for functional data (default: `task`) |
 | `--session ID` | folders | Session ID written as mapping key (default: `01`) |
 | `--subject ID` | single/folders | BIDS subject label; used with `--out-dir` for auto-naming |
-| `--dedup` | folders | Keep only the highest-prefix folder per series name (for aborted+repeated scans) |
+| `--dedup` | folders | For aborted+restarted scans: collapses pairs of same-named folders to the higher-prefix one. Groups of 3+ same-named folders are always kept as separate runs. |
 
 ---
 
@@ -359,7 +361,7 @@ python generate_bids_config.py \
   --csv NRBR_subject_list.csv \
   --source-base /data/raw \
   --out-dir /data/BIDS/code/mappings \
-  --mode folders --task prf --session 01 --dedup
+  --mode folders --task prf --session 01
 # Review/edit the generated YAMLs before proceeding
 git -C /data/BIDS add code/mappings/
 git -C /data/BIDS commit -m "Add scan mappings for all subjects"

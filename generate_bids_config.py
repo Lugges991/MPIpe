@@ -200,25 +200,37 @@ def apply_task_renames(mapping: Dict, renames: Dict[str, str]):
 # -- folders mode -------------------------------------------------------------
 
 def deduplicate_folders(folders: List[Path]) -> List[Path]:
-    """Keep only the folder with the highest numeric prefix per unique name suffix."""
+    """Keep only the folder with the highest numeric prefix per unique name suffix.
+
+    Only collapses groups of exactly 2 folders with the same suffix — the intended
+    use case of an aborted scan (low prefix) followed by a complete restart (higher
+    prefix).  Groups of 3+ same-suffix folders are kept as-is because they almost
+    certainly represent multiple legitimate runs of the same protocol, not redundant
+    retries.
+    """
     groups: Dict[str, List[Path]] = defaultdict(list)
     for folder in folders:
         parts = folder.name.split("_", 1)
         suffix = parts[1] if len(parts) > 1 else folder.name
         groups[suffix].append(folder)
 
+    def prefix_num(p: Path) -> int:
+        m = re.match(r"^(\d+)", p.name)
+        return int(m.group(1)) if m else 0
+
     result: List[Path] = []
     for suffix, group in groups.items():
-        if len(group) == 1:
+        if len(group) <= 1:
             result.extend(group)
-        else:
-            def prefix_num(p: Path) -> int:
-                m = re.match(r"^(\d+)", p.name)
-                return int(m.group(1)) if m else 0
-
+        elif len(group) == 2:
             best = max(group, key=prefix_num)
-            print(f"Duplicate suffix '{suffix}': {[p.name for p in group]} -> keeping {best.name}")
+            dropped = min(group, key=prefix_num)
+            print(f"[dedup] '{suffix}': dropping {dropped.name}, keeping {best.name}")
             result.append(best)
+        else:
+            # 3+ folders with the same suffix are assumed to be intentional separate runs
+            print(f"[dedup] '{suffix}': {len(group)} copies — keeping all (looks like multiple runs, not retries)")
+            result.extend(group)
     return result
 
 
