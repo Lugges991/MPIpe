@@ -61,12 +61,15 @@ except ImportError:  # pragma: no cover
 
 # -- Helpers ------------------------------------------------------------------
 
+
 def load_mapping(cfg_path: Path) -> Dict[str, Any]:
     """Load YAML or JSON mapping file."""
     text = cfg_path.read_text()
     if cfg_path.suffix.lower() in {".yaml", ".yml"}:
         if yaml is None:
-            sys.exit("PyYAML is required to read YAML configs - install with `pip install pyyaml`.")
+            sys.exit(
+                "PyYAML is required to read YAML configs - install with `pip install pyyaml`."
+            )
         return yaml.safe_load(text)
     try:
         return json.loads(text)
@@ -95,7 +98,9 @@ def copy_file(src: Path, dst: Path, method: str, dry: bool = False):
         raise ValueError(f"Unknown method: {method}")
 
 
-def build_dest_name(subject: str, session: str, suffix: str, ext: str = ".nii.gz") -> str:
+def build_dest_name(
+    subject: str, session: str, suffix: str, ext: str = ".nii.gz"
+) -> str:
     return f"sub-{subject}_ses-{session}_{suffix}{ext}"
 
 
@@ -111,11 +116,19 @@ def find_json_files(folder: Path) -> List[Path]:
     return list(folder.glob("*.json"))
 
 
-def write_json_with_metadata(src_json: Path, dst_json: Path, seq_type: str,
-                              method: str, dry: bool, task_name: str = "task"):
+def write_json_with_metadata(
+    src_json: Path,
+    dst_json: Path,
+    seq_type: str,
+    method: str,
+    dry: bool,
+    task_name: str = "task",
+):
     """Copy JSON sidecar, injecting TaskName / SequenceType BIDS fields."""
     if dry:
-        print(f" [DRY] {method.upper():6} {src_json} -> {dst_json} (+TaskName, +SequenceType:{seq_type})")
+        print(
+            f" [DRY] {method.upper():6} {src_json} -> {dst_json} (+TaskName, +SequenceType:{seq_type})"
+        )
         return
     try:
         meta = json.loads(src_json.read_text())
@@ -132,11 +145,14 @@ def write_json_with_metadata(src_json: Path, dst_json: Path, seq_type: str,
     dst_json.write_text(json.dumps(meta, indent=2))
 
 
-def write_fmap_json_with_metadata(src_json: Path, dst_json: Path, fmap_type: str,
-                                   method: str, dry: bool):
+def write_fmap_json_with_metadata(
+    src_json: Path, dst_json: Path, fmap_type: str, method: str, dry: bool
+):
     """Copy fieldmap JSON sidecar, injecting BIDS-required metadata."""
     if dry:
-        print(f" [DRY] {method.upper():6} {src_json} -> {dst_json} (+fmap metadata:{fmap_type})")
+        print(
+            f" [DRY] {method.upper():6} {src_json} -> {dst_json} (+fmap metadata:{fmap_type})"
+        )
         return
     try:
         meta = json.loads(src_json.read_text())
@@ -153,7 +169,9 @@ def write_fmap_json_with_metadata(src_json: Path, dst_json: Path, fmap_type: str
     dst_json.parent.mkdir(parents=True, exist_ok=True)
     dst_json.write_text(json.dumps(meta, indent=2))
 
+
 # -- files mode ---------------------------------------------------------------
+
 
 def run_files_mode(args, subject: str, session: str, mapping: Dict):
     """Original flat-file copy logic."""
@@ -165,29 +183,51 @@ def run_files_mode(args, subject: str, session: str, mapping: Dict):
                 if not src.exists():
                     print(f"WARNING - missing file {src}")
                     continue
-                dst = args.dest / f"sub-{subject}" / f"ses-{session}" / "anat" / build_dest_name(subject, session, label, ext)
+                dst = (
+                    args.dest
+                    / f"sub-{subject}"
+                    / f"ses-{session}"
+                    / "anat"
+                    / build_dest_name(subject, session, label, ext)
+                )
                 copy_file(src, dst, args.method, args.dry)
 
     # Functional
     for task, runs in mapping.get("func", {}).items():
         for run_label, entry in runs.items():
-            bold_stem  = entry.get("bold")
+            bold_stem = entry.get("bold")
             sbref_stem = entry.get("sbref")
-            for stem, suffix in filter(lambda x: x[0], [(bold_stem, "bold"), (sbref_stem, "sbref")]):
+            for stem, suffix in filter(
+                lambda x: x[0], [(bold_stem, "bold"), (sbref_stem, "sbref")]
+            ):
                 for ext in (".nii.gz", ".json"):
                     src = args.source / f"{stem}{ext}"
                     if not src.exists():
                         print(f"WARNING - missing file {src}")
                         continue
                     bids_suffix = f"task-{task}_{run_label}_{suffix}"
-                    dst = args.dest / f"sub-{subject}" / f"ses-{session}" / "func" / build_dest_name(subject, session, bids_suffix, ext)
+                    dst = (
+                        args.dest
+                        / f"sub-{subject}"
+                        / f"ses-{session}"
+                        / "func"
+                        / build_dest_name(subject, session, bids_suffix, ext)
+                    )
                     copy_file(src, dst, args.method, args.dry)
 
             # events
             if args.events_dir and not args.dry:
                 events_src = args.events_dir / f"task-{task}_{run_label}_events.tsv"
                 if events_src.exists():
-                    events_dst = args.dest / f"sub-{subject}" / f"ses-{session}" / "func" / build_dest_name(subject, session, f"task-{task}_{run_label}_events", ".tsv")
+                    events_dst = (
+                        args.dest
+                        / f"sub-{subject}"
+                        / f"ses-{session}"
+                        / "func"
+                        / build_dest_name(
+                            subject, session, f"task-{task}_{run_label}_events", ".tsv"
+                        )
+                    )
                     copy_file(events_src, events_dst, args.method, args.dry)
                 else:
                     print(f"Note: no events file found for {task} {run_label}")
@@ -200,10 +240,18 @@ def run_files_mode(args, subject: str, session: str, mapping: Dict):
                 if not src.exists():
                     print(f"WARNING - missing file {src}")
                     continue
-                dst = args.dest / f"sub-{subject}" / f"ses-{session}" / "fmap" / build_dest_name(subject, session, key, ext)
+                dst = (
+                    args.dest
+                    / f"sub-{subject}"
+                    / f"ses-{session}"
+                    / "fmap"
+                    / build_dest_name(subject, session, key, ext)
+                )
                 copy_file(src, dst, args.method, args.dry)
 
+
 # -- folders mode -------------------------------------------------------------
+
 
 def _ses_key_to_label(ses_key: str) -> str:
     """Strip the 'ses-' prefix and zero-pad if purely numeric."""
@@ -230,10 +278,22 @@ def run_folders_mode(args, subject: str, session: str, mapping: Dict):
                 continue
             for nf in niftis:
                 ext = ".nii.gz" if nf.name.endswith(".nii.gz") else ".nii"
-                dst = args.dest / f"sub-{subject}" / ses_dir / "anat" / build_dest_name(subject, session, anat_type, ext)
+                dst = (
+                    args.dest
+                    / f"sub-{subject}"
+                    / ses_dir
+                    / "anat"
+                    / build_dest_name(subject, session, anat_type, ext)
+                )
                 copy_file(nf, dst, args.method, args.dry)
             for jf in find_json_files(folder_path):
-                dst = args.dest / f"sub-{subject}" / ses_dir / "anat" / build_dest_name(subject, session, anat_type, ".json")
+                dst = (
+                    args.dest
+                    / f"sub-{subject}"
+                    / ses_dir
+                    / "anat"
+                    / build_dest_name(subject, session, anat_type, ".json")
+                )
                 copy_file(jf, dst, args.method, args.dry)
 
     # Functional
@@ -256,11 +316,25 @@ def run_folders_mode(args, subject: str, session: str, mapping: Dict):
 
                 for nf in niftis:
                     ext = ".nii.gz" if nf.name.endswith(".nii.gz") else ".nii"
-                    dst = args.dest / f"sub-{subject}" / ses_dir / "func" / build_dest_name(subject, session, bids_suffix, ext)
+                    dst = (
+                        args.dest
+                        / f"sub-{subject}"
+                        / ses_dir
+                        / "func"
+                        / build_dest_name(subject, session, bids_suffix, ext)
+                    )
                     copy_file(nf, dst, args.method, args.dry)
                 for jf in find_json_files(folder_path):
-                    dst = args.dest / f"sub-{subject}" / ses_dir / "func" / build_dest_name(subject, session, bids_suffix, ".json")
-                    write_json_with_metadata(jf, dst, seq_type, args.method, args.dry, task_name=task)
+                    dst = (
+                        args.dest
+                        / f"sub-{subject}"
+                        / ses_dir
+                        / "func"
+                        / build_dest_name(subject, session, bids_suffix, ".json")
+                    )
+                    write_json_with_metadata(
+                        jf, dst, seq_type, args.method, args.dry, task_name=task
+                    )
 
     # Fieldmaps
     for _fmap_group, fmap_data in session_data.get("fmap", {}).items():
@@ -283,13 +357,27 @@ def run_folders_mode(args, subject: str, session: str, mapping: Dict):
 
             for nf in niftis:
                 ext = ".nii.gz" if nf.name.endswith(".nii.gz") else ".nii"
-                dst = args.dest / f"sub-{subject}" / ses_dir / "fmap" / build_dest_name(subject, session, bids_suffix, ext)
+                dst = (
+                    args.dest
+                    / f"sub-{subject}"
+                    / ses_dir
+                    / "fmap"
+                    / build_dest_name(subject, session, bids_suffix, ext)
+                )
                 copy_file(nf, dst, args.method, args.dry)
             for jf in find_json_files(folder_path):
-                dst = args.dest / f"sub-{subject}" / ses_dir / "fmap" / build_dest_name(subject, session, bids_suffix, ".json")
+                dst = (
+                    args.dest
+                    / f"sub-{subject}"
+                    / ses_dir
+                    / "fmap"
+                    / build_dest_name(subject, session, bids_suffix, ".json")
+                )
                 write_fmap_json_with_metadata(jf, dst, key, args.method, args.dry)
 
+
 # -- Sessions map lookup -------------------------------------------------------
+
 
 def lookup_session(sessions_map: Path, scanner_id: str) -> dict:
     """Return the sessions_map row for a given scanner pseudonym.
@@ -306,24 +394,113 @@ def lookup_session(sessions_map: Path, scanner_id: str) -> dict:
 
 # -- CLI ----------------------------------------------------------------------
 
+
+def _read_subject_csv(path: Path) -> list:
+    """Read subject list CSV; utf-8-sig handles optional Excel BOM."""
+    with path.open(newline="", encoding="utf-8-sig") as f:
+        return list(csv.DictReader(f))
+
+
 def main():  # noqa: C901
-    p = argparse.ArgumentParser(description="Copy/link NIfTI series into a BIDS tree using a YAML mapping")
-    p.add_argument("--source", required=True, type=Path, help="Source directory")
-    p.add_argument("--dest",   required=True, type=Path, help="BIDS dataset root (created if absent)")
-    p.add_argument("--config", required=True, type=Path, help="YAML or JSON mapping file")
-    p.add_argument("--mode", choices=["files", "folders"], default="files",
-                   help="'files': flat *.nii.gz source (default); 'folders': one subfolder per series")
+    p = argparse.ArgumentParser(
+        description="Copy/link NIfTI series into a BIDS tree using a YAML mapping"
+    )
+    # Single-subject args (optional when --csv is used)
+    p.add_argument("--source", type=Path, help="Source directory (single-subject mode)")
+    p.add_argument(
+        "--dest", required=True, type=Path, help="BIDS dataset root (created if absent)"
+    )
+    p.add_argument(
+        "--config", type=Path, help="YAML or JSON mapping file (single-subject mode)"
+    )
+    p.add_argument(
+        "--mode",
+        choices=["files", "folders"],
+        default="files",
+        help="'files': flat *.nii.gz source (default); 'folders': one subfolder per series",
+    )
     p.add_argument("--subject", help="Subject ID [default: basename of --source]")
-    p.add_argument("--session", default="01", help="Session label for BIDS filenames [01]")
+    p.add_argument(
+        "--session", default="01", help="Session label for BIDS filenames [01]"
+    )
     p.add_argument("--method", choices=["copy", "link", "symlink"], default="copy")
-    p.add_argument("--events-dir", type=Path, help="[files] Folder with *_events.tsv files")
-    p.add_argument("--dry", action="store_true", help="Dry-run: print actions without writing")
-    p.add_argument("--sessions-map", type=Path,
-                   help="Path to code/sessions_map.tsv; resolves --subject/--session from --scanner-id")
-    p.add_argument("--scanner-id",
-                   help="Scanner pseudonym (e.g. TYCM-RTYX); looked up in --sessions-map")
+    p.add_argument(
+        "--events-dir", type=Path, help="[files] Folder with *_events.tsv files"
+    )
+    p.add_argument(
+        "--dry", action="store_true", help="Dry-run: print actions without writing"
+    )
+    p.add_argument(
+        "--sessions-map",
+        type=Path,
+        help="Path to code/sessions_map.tsv; resolves --subject/--session from --scanner-id",
+    )
+    p.add_argument(
+        "--scanner-id",
+        help="Scanner pseudonym (e.g. TYCM-RTYX); looked up in --sessions-map",
+    )
+    # CSV batch-mode args
+    p.add_argument(
+        "--csv", type=Path,
+        help="[batch] Subject list CSV (columns: Pseudonym, BIDS-ID, ...)",
+    )
+    p.add_argument(
+        "--source-base", type=Path,
+        help="[batch] Base directory; per-subject source = <source-base>/<Pseudonym>/NIFTI/",
+    )
+    p.add_argument(
+        "--config-dir", type=Path,
+        help="[batch] Directory containing sub-{ID}_ses-{session}_mapping.yaml files",
+    )
     args = p.parse_args()
 
+    # --- Validate modes -------------------------------------------------------
+    if args.csv and args.source:
+        p.error("--csv and --source are mutually exclusive; use one or the other")
+    if not args.csv and not args.source:
+        p.error("one of --source or --csv is required")
+    if args.csv and (not args.source_base or not args.config_dir):
+        p.error("--source-base and --config-dir are required with --csv")
+    if not args.csv and not args.config:
+        p.error("--config is required without --csv")
+
+    # --- Batch mode -----------------------------------------------------------
+    if args.csv:
+        import copy as _copy
+        if not args.csv.is_file():
+            sys.exit(f"CSV not found: {args.csv}")
+        rows = _read_subject_csv(args.csv)
+        session = args.session.removeprefix("ses-")
+        ok = skipped = 0
+        for row in rows:
+            pseudonym = row.get("Pseudonym", "").strip()
+            bids_id   = row.get("BIDS-ID", "").strip()
+            if not pseudonym or not bids_id:
+                print(f"[WARN] Row {row.get('Subject_NR','?')}: missing Pseudonym or BIDS-ID — skipping.")
+                skipped += 1
+                continue
+            sub    = bids_id.zfill(2)
+            source = args.source_base / pseudonym / "NIFTI"
+            config = args.config_dir / f"sub-{sub}_ses-{session}_mapping.yaml"
+            if not source.is_dir():
+                print(f"[WARN] sub-{sub} ({pseudonym}): source not found: {source} — skipping.")
+                skipped += 1
+                continue
+            if not config.is_file():
+                print(f"[WARN] sub-{sub}: config not found: {config} — skipping.")
+                skipped += 1
+                continue
+            mapping   = load_mapping(config)
+            row_args  = _copy.copy(args)
+            row_args.source = source
+            print(f"\n--- sub-{sub} ({pseudonym}) ---")
+            run_folders_mode(row_args, sub, session, mapping)
+            ok += 1
+        suffix = " (dry-run)" if args.dry else ""
+        print(f"\nDone{suffix}: {ok}/{len(rows)} subjects processed, {skipped} skipped.")
+        return
+
+    # --- Single-subject mode --------------------------------------------------
     if not args.source.is_dir():
         sys.exit(f"Source directory not found: {args.source}")
     if not args.config.is_file():

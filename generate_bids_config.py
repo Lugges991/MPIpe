@@ -35,6 +35,7 @@ python generate_bids_config.py \\
 """
 
 import argparse
+import csv
 import itertools
 import re
 import sys
@@ -277,6 +278,14 @@ def categorise_folders(folders: List[Path], task_name: str = "task", session_id:
 
     return mapping
 
+# -- CSV batch helper ----------------------------------------------------------
+
+def read_subject_csv(path: Path) -> List[Dict]:
+    """Read subject list CSV; utf-8-sig handles optional Excel BOM."""
+    with path.open(newline="", encoding="utf-8-sig") as f:
+        return list(csv.DictReader(f))
+
+
 # -- CLI ----------------------------------------------------------------------
 
 def main():  # noqa: C901
@@ -284,7 +293,8 @@ def main():  # noqa: C901
         description="Generate YAML mapping for copy2bids.py",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    p.add_argument("--source", required=True, type=Path, help="Source directory")
+    # Single-subject source (mutually exclusive with --csv)
+    p.add_argument("--source", type=Path, help="Source directory (single-subject mode)")
     p.add_argument("--out", type=Path, default=Path("mapping.yaml"), help="Output YAML file [mapping.yaml]")
     p.add_argument("--mode", choices=["files", "folders"], default="files",
                    help="'files': scan *.nii* directly (default); 'folders': scan subdirectories")
@@ -302,8 +312,60 @@ def main():  # noqa: C901
                    help="[folders] BIDS subject label (without sub-); used with --out-dir for auto-naming")
     p.add_argument("--out-dir", type=Path,
                    help="[folders] Write to <out-dir>/sub-{subject}_ses-{session}_mapping.yaml (overrides --out)")
+    # CSV batch-mode options
+    p.add_argument("--csv", type=Path,
+                   help="[batch] Subject list CSV (columns: Pseudonym, BIDS-ID, Comments, ...)")
+    p.add_argument("--source-base", type=Path,
+                   help="[batch] Base directory; per-subject source = <source-base>/<Pseudonym>/NIFTI/")
     args = p.parse_args()
 
+    # --- Validate mutually exclusive modes ------------------------------------
+    if args.csv and args.source:
+        p.error("--csv and --source are mutually exclusive; use one or the other")
+    if not args.csv and not args.source:
+        p.error("one of --source or --csv is required")
+    if args.csv and not args.source_base:
+        p.error("--source-base is required with --csv")
+    if args.csv and not args.out_dir:
+        p.error("--out-dir is required with --csv")
+
+    # --- Batch mode -----------------------------------------------------------
+    if args.csv:
+        if not args.csv.is_file():
+            sys.exit(f"CSV not found: {args.csv}")
+        rows = read_subject_csv(args.csv)
+        ok = skipped = 0
+        for row in rows:
+            pseudonym = row.get("Pseudonym", "").strip()
+            bids_id   = row.get("BIDS-ID", "").strip()
+            if not pseudonym or not bids_id:
+                print(f"[WARN] Row {row.get('Subject_NR','?')}: missing Pseudonym or BIDS-ID — skipping.")
+                skipped += 1
+                continue
+            source = args.source_base / pseudonym / "NIFTI"
+            if not source.is_dir():
+                print(f"[WARN] sub-{bids_id} ({pseudonym}): source not found: {source} — skipping.")
+                skipped += 1
+                continue
+            sub = bids_id.zfill(2)
+            ses = args.session.removeprefix("ses-")
+            mapping = categorise_folders(
+                scan_folders(source, dedup=args.dedup),
+                task_name=args.task,
+                session_id=ses,
+            )
+            yaml_str = yaml.safe_dump(dict(mapping), sort_keys=False, default_flow_style=False)
+            out_path = args.out_dir / f"sub-{sub}_ses-{ses}_mapping.yaml"
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            out_path.write_text(yaml_str)
+            comment = row.get("Comments", "").strip()
+            note    = f"  [NOTE: {comment}]" if comment else ""
+            print(f"[OK]  {out_path}{note}")
+            ok += 1
+        print(f"\nDone: {ok}/{len(rows)} configs written, {skipped} skipped.")
+        return
+
+    # --- Single-subject mode --------------------------------------------------
     if not args.source.is_dir():
         sys.exit(f"Source directory not found: {args.source}")
 
