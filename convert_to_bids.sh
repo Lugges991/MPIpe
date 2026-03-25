@@ -1,26 +1,23 @@
 #!/bin/bash
-# convert_to_bids.sh - Orchestrate the full raw → BIDS pipeline.
+# convert_to_bids.sh - Orchestrate the full raw → BIDS pipeline for a single subject.
 #
 # Usage:
-#   ./convert_to_bids.sh <scanner_id> <session_id> <bids_root> <raw_data_root>
+#   ./convert_to_bids.sh <scanner_id> <session_id> <bids_root> <raw_data_root> [csv_path]
 #
 # Arguments:
-#   scanner_id    Scanner pseudonym (e.g. TYCM-RTYX) — looked up in sessions_map.tsv
+#   scanner_id    Scanner pseudonym (e.g. TYCM-RTYX) — looked up in the subject CSV
 #   session_id    Session number (e.g. 01 or 02)
 #   bids_root     Path to the BIDS dataset root directory
 #   raw_data_root Path to the root of raw data (scanner_id/NIFTI will be appended)
+#   csv_path      (optional) Path to subject list CSV [default: <script_dir>/NRBR_subject_list.csv]
 #
 # Example:
 #   ./convert_to_bids.sh TYCM-RTYX 01 /data/BIDS /data/raw
-#
-# Prerequisites:
-#   - Subject already registered:  python register_subject.py ...
-#   - sessions_map.tsv exists at:  <bids_root>/code/sessions_map.tsv
 
 set -e
 
-if [ $# -ne 4 ]; then
-    echo "Usage: $0 <scanner_id> <session_id> <bids_root> <raw_data_root>"
+if [ $# -lt 4 ]; then
+    echo "Usage: $0 <scanner_id> <session_id> <bids_root> <raw_data_root> [csv_path]"
     echo ""
     echo "Example:"
     echo "  $0 TYCM-RTYX 01 /data/BIDS /data/raw"
@@ -31,17 +28,17 @@ SCANNER_ID=$1
 SESSION=$2
 BIDS_ROOT=$(realpath "$3")
 RAW_ROOT=$(realpath "$4")
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CSV_PATH="${5:-$SCRIPT_DIR/NRBR_subject_list.csv}"
 
-SESSIONS_MAP="$BIDS_ROOT/code/sessions_map.tsv"
 SOURCE_PATH="$RAW_ROOT/$SCANNER_ID/NIFTI"
 MAPPINGS_DIR="$BIDS_ROOT/code/mappings"
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # ── Validate inputs ──────────────────────────────────────────────────────────
 
-if [ ! -f "$SESSIONS_MAP" ]; then
-    echo "Error: sessions_map.tsv not found at $SESSIONS_MAP"
-    echo "Run: python register_subject.py --bids-root $BIDS_ROOT ..."
+if [ ! -f "$CSV_PATH" ]; then
+    echo "Error: subject list CSV not found: $CSV_PATH"
+    echo "Pass the path as the 5th argument or place NRBR_subject_list.csv next to this script."
     exit 1
 fi
 
@@ -50,26 +47,25 @@ if [ ! -d "$SOURCE_PATH" ]; then
     exit 1
 fi
 
-# ── Resolve subject ID from sessions_map ─────────────────────────────────────
+# ── Resolve subject ID from CSV ───────────────────────────────────────────────
 
-SES_LABEL="ses-$(printf '%02d' $SESSION 2>/dev/null || echo $SESSION)"
 SUBJECT=$(python3 -c "
 import csv, sys
-ses = '$SES_LABEL'
 sid = '$SCANNER_ID'
-with open('$SESSIONS_MAP') as f:
-    for row in csv.DictReader(f, delimiter='\t'):
-        if row['scanner_id'].strip() == sid and row['session_id'].strip() == ses:
-            print(row['participant_id'].replace('sub-','').strip())
+with open('$CSV_PATH', newline='', encoding='utf-8-sig') as f:
+    for row in csv.DictReader(f):
+        if row.get('Pseudonym', '').strip() == sid:
+            print(row['BIDS-ID'].strip().zfill(2))
             sys.exit(0)
 sys.exit(1)
 " 2>/dev/null) || {
-    echo "Error: scanner_id='$SCANNER_ID' session='$SES_LABEL' not found in $SESSIONS_MAP"
-    echo "Run: python register_subject.py --bids-root $BIDS_ROOT --scanner-id $SCANNER_ID --session $SESSION ..."
+    echo "Error: scanner_id='$SCANNER_ID' not found in $CSV_PATH"
     exit 1
 }
 
-echo "Resolved: scanner_id=$SCANNER_ID → sub-$SUBJECT $SES_LABEL"
+SES_LABEL="ses-$(printf '%02d' "$SESSION" 2>/dev/null || echo "$SESSION")"
+
+echo "Resolved: $SCANNER_ID → sub-$SUBJECT $SES_LABEL"
 echo ""
 
 MAPPING_FILE="$MAPPINGS_DIR/sub-${SUBJECT}_ses-${SESSION}_mapping.yaml"
@@ -120,8 +116,8 @@ python3 "$SCRIPT_DIR/copy2bids.py" \
     --source "$SOURCE_PATH" \
     --dest "$BIDS_ROOT" \
     --config "$MAPPING_FILE" \
-    --sessions-map "$SESSIONS_MAP" \
-    --scanner-id "$SCANNER_ID" \
+    --subject "$SUBJECT" \
+    --session "$SESSION" \
     --dry
 
 echo ""
@@ -141,8 +137,8 @@ python3 "$SCRIPT_DIR/copy2bids.py" \
     --source "$SOURCE_PATH" \
     --dest "$BIDS_ROOT" \
     --config "$MAPPING_FILE" \
-    --sessions-map "$SESSIONS_MAP" \
-    --scanner-id "$SCANNER_ID" \
+    --subject "$SUBJECT" \
+    --session "$SESSION" \
     --method link
 
 echo ""

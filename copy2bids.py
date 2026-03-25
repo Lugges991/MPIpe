@@ -401,6 +401,32 @@ def _read_subject_csv(path: Path) -> list:
         return list(csv.DictReader(f))
 
 
+def _write_participants_tsv(bids_root: Path, csv_rows: list) -> None:
+    """Write/update participants.tsv in bids_root from CSV rows (age/sex default to n/a)."""
+    tsv_path = bids_root / "participants.tsv"
+    header = ["participant_id", "age", "sex"]
+    existing: Dict[str, Any] = {}
+    if tsv_path.exists():
+        with tsv_path.open(newline="") as f:
+            for row in csv.DictReader(f, delimiter="\t"):
+                pid = row.get("participant_id", "").strip()
+                if pid:
+                    existing[pid] = row
+    for row in csv_rows:
+        bids_id = row.get("BIDS-ID", "").strip()
+        if not bids_id:
+            continue
+        pid = f"sub-{bids_id.zfill(2)}"
+        existing.setdefault(pid, {"participant_id": pid, "age": "n/a", "sex": "n/a"})
+    bids_root.mkdir(parents=True, exist_ok=True)
+    with tsv_path.open("w", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=header, delimiter="\t", extrasaction="ignore")
+        w.writeheader()
+        for entry in sorted(existing.values(), key=lambda r: r["participant_id"]):
+            w.writerow(entry)
+    print(f"[OK]  participants.tsv updated ({len(existing)} subjects → {tsv_path})")
+
+
 def main():  # noqa: C901
     p = argparse.ArgumentParser(
         description="Copy/link NIfTI series into a BIDS tree using a YAML mapping"
@@ -498,6 +524,8 @@ def main():  # noqa: C901
             ok += 1
         suffix = " (dry-run)" if args.dry else ""
         print(f"\nDone{suffix}: {ok}/{len(rows)} subjects processed, {skipped} skipped.")
+        if not args.dry:
+            _write_participants_tsv(args.dest, rows)
         return
 
     # --- Single-subject mode --------------------------------------------------
