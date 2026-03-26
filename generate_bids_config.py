@@ -271,8 +271,16 @@ def categorise_folders(folders: List[Path], task_name: str = "task", session_id:
             mapping[ses_key].setdefault("fmap", {}).setdefault("dir", {})["b1map"] = name
             continue
         if RULES_FOLDERS["fmap"]["gre"].search(name):
-            gre_run += 1
-            key = f"e{gre_run}"
+            lower = name.lower()
+            if "ph" in lower or "phase" in lower:
+                key = "phasediff"
+            elif "e1" in lower:
+                key = "magnitude1"
+            elif "e2" in lower:
+                key = "magnitude2"
+            else:
+                gre_run += 1
+                key = f"magnitude{gre_run}"
             mapping[ses_key].setdefault("fmap", {}).setdefault("gre", {})[key] = name
             continue
 

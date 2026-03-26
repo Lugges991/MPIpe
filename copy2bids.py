@@ -59,7 +59,23 @@ try:
 except ImportError:  # pragma: no cover
     yaml = None  # will still support JSON configs
 
+# Backward-compat mapping for old YAML files generated before BIDS-compliant key names
+_GRE_COMPAT = {"e1": "magnitude1", "e2": "magnitude2", "e3": "magnitude3"}
+
 # -- Helpers ------------------------------------------------------------------
+
+
+def ensure_dataset_description(dest: Path, name: str, dry: bool) -> None:
+    path = dest / "dataset_description.json"
+    if path.exists():
+        return
+    content = {"Name": name, "BIDSVersion": "1.8.0"}
+    if dry:
+        print(f"[DRY] Would write {path}")
+        return
+    dest.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(content, indent=2) + "\n")
+    print(f"Created {path}")
 
 
 def load_mapping(cfg_path: Path) -> Dict[str, Any]:
@@ -353,7 +369,7 @@ def run_folders_mode(args, subject: str, session: str, mapping: Dict):
             elif key == "b1map":
                 bids_suffix = "TB1map"
             else:
-                bids_suffix = f"fmap-{key}"
+                bids_suffix = _GRE_COMPAT.get(key, key)
 
             for nf in niftis:
                 ext = ".nii.gz" if nf.name.endswith(".nii.gz") else ".nii"
@@ -478,6 +494,10 @@ def main():  # noqa: C901
         "--config-dir", type=Path,
         help="[batch] Directory containing sub-{ID}_ses-{session}_mapping.yaml files",
     )
+    p.add_argument(
+        "--dataset-name", default="Dataset",
+        help="Name field written to dataset_description.json if it does not exist [Dataset]",
+    )
     args = p.parse_args()
 
     # --- Validate modes -------------------------------------------------------
@@ -489,6 +509,8 @@ def main():  # noqa: C901
         p.error("--source-base and --config-dir are required with --csv")
     if not args.csv and not args.config:
         p.error("--config is required without --csv")
+
+    ensure_dataset_description(args.dest, args.dataset_name, args.dry)
 
     # --- Batch mode -----------------------------------------------------------
     if args.csv:
