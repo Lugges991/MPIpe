@@ -11,13 +11,15 @@ Designed for the MPI for Biological Cybernetics, it supports two source layouts:
 
 ## Overview
 
-The pipeline has two stages:
+The pipeline has two stages for NIfTI → BIDS conversion, plus an optional events stage:
 
 1. **`generate_bids_config.py`** — scans the source and writes a YAML scan mapping.
 2. **`copy2bids.py`** — reads the mapping and organises files into a BIDS tree.
+3. **`generate_events_config.py`** *(events)* — derives per-subject run mappings from the BIDS mapping YAMLs; outputs reviewable configs.
+4. **`copy_events.py`** *(events)* — copies events TSV files into the BIDS `func/` tree using the reviewed configs.
 
-Both scripts accept `--csv` for batch processing all subjects at once.
-`convert_to_bids.sh` orchestrates both stages for a single subject in one command.
+Both NIfTI stages accept `--csv` for batch processing all subjects at once.
+`convert_to_bids.sh` orchestrates stages 1–2 for a single subject in one command.
 
 ## Features
 
@@ -30,7 +32,7 @@ Both scripts accept `--csv` for batch processing all subjects at once.
 - **Flexible task naming**: `--force-task` (files) or `--task` (folders)
 - **Multiple copy methods**: `copy`, `link` (hard-link), `symlink`
 - **SBRef support** *(files mode)*
-- **Events integration** *(files mode)*: optional `*_events.tsv` copying
+- **Events pipeline**: two-step workflow — auto-generate per-subject run mappings from BIDS configs, review, then copy
 - **Dry-run mode**: preview every action before executing
 
 ## Requirements
@@ -351,22 +353,133 @@ bids_root/
 
 ---
 
+## Events pipeline
+
+Behavioural event files live outside the BIDS tree and often include extra runs
+(training, calibration) that have no corresponding fMRI acquisition.
+The events pipeline determines the correct source→BIDS run mapping per subject
+automatically, lets you review and correct it, then copies the files.
+
+### Stage 3 — generate_events_config.py
+
+Reads each subject's BIDS mapping YAML (from Stage 1) to count how many
+functional runs were acquired (`N`), then sorts the source event files by run
+number and takes the **last N** — discarding training/calibration runs at the
+start.  Outputs one YAML config per subject.
+
+```bash
+python generate_events_config.py \
+  --csv .data/subject_map.csv \
+  --mappings-dir .data/mappings \
+  --events-base ../BRET/data \
+  --task br \
+  --session 01 \
+  --out-dir .data/events_configs
+```
+
+Subjects marked `DISCARD` in the CSV `Comments` column are skipped
+automatically.  Missing events directories produce a `[SKIP]` warning.
+
+#### Per-subject config format
+
+```yaml
+'subject_nr': '13'
+'bids_id': '03'
+'session': '01'
+'task': 'br'
+'runs':
+  '05': '01'
+  '06': '02'
+  '07': '03'
+  '08': '04'
+  '09': '05'
+  '10': '06'
+```
+
+Review and edit these files before running Stage 4.  Common corrections:
+- Remove a run that was aborted mid-scan
+- Shift the starting run if training runs differ in count across subjects
+
+#### Options reference
+
+| Option | Description |
+|--------|-------------|
+| `--csv PATH` | Subject list CSV (columns: `Subject_NR`, `BIDS-ID`, `Comments`, …) |
+| `--mappings-dir PATH` | Directory of BIDS mapping YAMLs from Stage 1 |
+| `--events-base PATH` | Root of events tree; per-subject path: `<base>/sub-{NR}/events/` |
+| `--task NAME` | BIDS task label written into the config (e.g. `br`) |
+| `--session ID` | Session label (default: `01`) |
+| `--out-dir PATH` | Directory to write per-subject events config YAMLs |
+
+### Stage 4 — copy_events.py (new mode)
+
+Reads per-subject configs from `--config-dir` and copies event TSV files into
+the BIDS `func/` tree.  Each config is self-contained, so no separate CSV is
+needed.
+
+```bash
+# Dry-run preview
+python copy_events.py \
+  --config-dir .data/events_configs \
+  --events-base ../BRET/data \
+  --dest /data/BIDS --dry
+
+# Actual copy
+python copy_events.py \
+  --config-dir .data/events_configs \
+  --events-base ../BRET/data \
+  --dest /data/BIDS --method link
+```
+
+#### Source layout
+
+```
+<events-base>/sub-{Subject_NR}/events/
+    s{NR}r{NN}nr_events.tsv          ← no-report condition
+    s{NR}r{NN}r_events.tsv           ← report condition
+    s{NR}r{NN}nr_switch_events.tsv   ← no-report switch trials
+    s{NR}r{NN}r_switch_events.tsv    ← report switch trials
+```
+
+#### BIDS output
+
+```
+<dest>/sub-{BIDS-ID}/ses-{session}/func/
+    sub-{ID}_ses-{session}_task-{task}_acq-noreport_run-01_events.tsv
+    sub-{ID}_ses-{session}_task-{task}_acq-report_run-01_events.tsv
+    sub-{ID}_ses-{session}_task-{task}_acq-noreport_run-01_switch_events.tsv
+    ...
+```
+
+#### Options reference
+
+| Option | Description |
+|--------|-------------|
+| `--config-dir PATH` | Directory of per-subject events config YAMLs *(new mode)* |
+| `--csv PATH` | Subject list CSV *(legacy mode only)* |
+| `--config PATH` | Global run-mapping config *(legacy mode only)* |
+| `--events-base PATH` | Root of events tree |
+| `--dest PATH` | BIDS root directory |
+| `--session ID` | Session label *(legacy mode only; per-subject configs carry their own)* |
+| `--method` | `copy`, `link`, or `symlink` (default: `copy`) |
+| `--dry` | Dry-run — print actions without writing |
+
+---
+
 ## Full reproducible workflow
 
 ### Batch workflow (multiple subjects from CSV)
 
 ```bash
-# Step 1 — generate configs for all subjects in CSV
+# Step 1 — generate scan mapping configs
 python generate_bids_config.py \
   --csv NRBR_subject_list.csv \
   --source-base /data/raw \
   --out-dir /data/BIDS/code/mappings \
   --mode folders --task prf --session 01 --dedup
 # Review/edit the generated YAMLs before proceeding
-git -C /data/BIDS add code/mappings/
-git -C /data/BIDS commit -m "Add scan mappings for all subjects"
 
-# Step 2 — dry-run preview
+# Step 2 — dry-run preview NIfTI copy
 python copy2bids.py \
   --csv NRBR_subject_list.csv \
   --source-base /data/raw \
@@ -374,13 +487,34 @@ python copy2bids.py \
   --dest /data/BIDS \
   --mode folders --method link --dry
 
-# Step 3 — actual copy
+# Step 3 — actual NIfTI copy
 python copy2bids.py \
   --csv NRBR_subject_list.csv \
   --source-base /data/raw \
   --config-dir /data/BIDS/code/mappings \
   --dest /data/BIDS \
   --mode folders --method link
+
+# Step 4 — generate per-subject events configs
+python generate_events_config.py \
+  --csv .data/subject_map.csv \
+  --mappings-dir .data/mappings \
+  --events-base ../BRET/data \
+  --task br --session 01 \
+  --out-dir .data/events_configs
+# Review/edit .data/events_configs/ before proceeding
+
+# Step 5 — dry-run preview events copy
+python copy_events.py \
+  --config-dir .data/events_configs \
+  --events-base ../BRET/data \
+  --dest /data/BIDS --dry
+
+# Step 6 — actual events copy
+python copy_events.py \
+  --config-dir .data/events_configs \
+  --events-base ../BRET/data \
+  --dest /data/BIDS --method link
 ```
 
 ### Single-subject workflow
