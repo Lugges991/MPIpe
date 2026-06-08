@@ -132,6 +132,22 @@ def find_json_files(folder: Path) -> List[Path]:
     return list(folder.glob("*.json"))
 
 
+def resolve_series_sources(source: Path, value: str):
+    """Resolve an fmap mapping value to (niftis, jsons).
+
+    `value` is either a folder name (all NIfTI series inside, used by PA / b1map)
+    or a 'folder/stem' reference to a single dcm2niix series (magnitude echo,
+    phase difference, ...). The latter lets one source folder contribute several
+    BIDS files (magnitude1/magnitude2/phasediff) without colliding on one name.
+    """
+    p = source / value
+    if p.is_dir():
+        return find_nifti_files(p), find_json_files(p)
+    niftis = [c for ext in (".nii.gz", ".nii") if (c := source / f"{value}{ext}").exists()]
+    jpath = source / f"{value}.json"
+    return niftis, ([jpath] if jpath.exists() else [])
+
+
 def write_json_with_metadata(
     src_json: Path,
     dst_json: Path,
@@ -354,14 +370,10 @@ def run_folders_mode(args, subject: str, session: str, mapping: Dict):
 
     # Fieldmaps
     for _fmap_group, fmap_data in session_data.get("fmap", {}).items():
-        for key, folder_name in fmap_data.items():
-            folder_path = args.source / folder_name
-            if not folder_path.exists():
-                print(f"WARNING: folder not found: {folder_path}")
-                continue
-            niftis = find_nifti_files(folder_path)
+        for key, value in fmap_data.items():
+            niftis, jsons = resolve_series_sources(args.source, value)
             if not niftis:
-                print(f"WARNING: no NIfTI in {folder_path}")
+                print(f"WARNING: no NIfTI for fmap '{key}': {args.source / value}")
                 continue
 
             if key == "PA":
@@ -381,7 +393,7 @@ def run_folders_mode(args, subject: str, session: str, mapping: Dict):
                     / build_dest_name(subject, session, bids_suffix, ext)
                 )
                 copy_file(nf, dst, args.method, args.dry)
-            for jf in find_json_files(folder_path):
+            for jf in jsons:
                 dst = (
                     args.dest
                     / f"sub-{subject}"

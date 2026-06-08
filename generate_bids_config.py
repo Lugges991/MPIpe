@@ -271,17 +271,28 @@ def categorise_folders(folders: List[Path], task_name: str = "task", session_id:
             mapping[ses_key].setdefault("fmap", {}).setdefault("dir", {})["b1map"] = name
             continue
         if RULES_FOLDERS["fmap"]["gre"].search(name):
-            lower = name.lower()
-            if "ph" in lower or "phase" in lower:
-                key = "phasediff"
-            elif "e1" in lower:
-                key = "magnitude1"
-            elif "e2" in lower:
-                key = "magnitude2"
-            else:
+            gre = mapping[ses_key].setdefault("fmap", {}).setdefault("gre", {})
+            # The echo / phase signal lives in the NIfTI filename token
+            # (_e1, _e2, _e2_ph), not the folder name, so inspect each file and
+            # emit a 'folder/stem' value: one folder can hold several BIDS series.
+            niftis = sorted(folder.glob("*.nii.gz")) + sorted(folder.glob("*.nii"))
+            if not niftis:
                 gre_run += 1
-                key = f"magnitude{gre_run}"
-            mapping[ses_key].setdefault("fmap", {}).setdefault("gre", {})[key] = name
+                gre[f"magnitude{gre_run}"] = name
+                continue
+            for nf in niftis:
+                stem = series_id(nf)
+                low = stem.lower()
+                if "_ph" in low or "phase" in low:  # check before _e2 (e2_ph)
+                    key = "phasediff"
+                elif "_e1" in low:
+                    key = "magnitude1"
+                elif "_e2" in low:
+                    key = "magnitude2"
+                else:
+                    gre_run += 1
+                    key = f"magnitude{gre_run}"
+                gre[key] = f"{name}/{stem}"
             continue
 
         # functional - bSSFP before EPI to avoid broad EPI pattern stealing bSSFP series

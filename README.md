@@ -268,7 +268,16 @@ ses-01:
     dir:
       PA:    00013_dzne_ep3d_TR4200ms_B1vol_revPE
       b1map: 00017_tfl_b1map_2mm_B1vol
+    gre:
+      magnitude1: 00020_gre_field_mapping/00020_gre_field_mapping_e1
+      magnitude2: 00020_gre_field_mapping/00020_gre_field_mapping_e2
+      phasediff:  00021_gre_field_mapping/00021_gre_field_mapping_e2_ph
 ```
+
+> **Note (GRE fieldmaps):** the magnitude echoes and the phase difference share a
+> folder name and differ only by the NIfTI filename token (`_e1`, `_e2`, `_e2_ph`),
+> so gre entries map a BIDS suffix to a `folder/stem` file reference rather than a
+> folder. `PA` / `b1map` entries stay folder-valued.
 
 > **Note (folders mode):** by default all folders are kept and assigned sequential run numbers.
 > Pass `--dedup` if a scan was aborted and restarted — it then keeps only the highest-prefix folder per series name.
@@ -348,7 +357,10 @@ bids_root/
         │   └── ...
         └── fmap/
             ├── sub-{subject}_ses-{session}_dir-PA_epi.nii.gz
-            └── sub-{subject}_ses-{session}_TB1map.nii.gz
+            ├── sub-{subject}_ses-{session}_TB1map.nii.gz
+            ├── sub-{subject}_ses-{session}_magnitude1.nii.gz
+            ├── sub-{subject}_ses-{session}_magnitude2.nii.gz
+            └── sub-{subject}_ses-{session}_phasediff.nii.gz
 ```
 
 ---
