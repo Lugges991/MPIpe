@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/MPIpe_logo.png" alt="MPIpe logo" width="280">
+</p>
+
 # MPIpe: MRI Processing Pipeline for BIDS Conversion
 
 A Python pipeline for converting neuroimaging data from NIfTI format to BIDS
