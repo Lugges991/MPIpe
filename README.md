@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/MPIpe_logo.png" alt="MPIpe logo" width="280">
+  <img src="assets/MPIpe_logo.png" alt="MPIpe logo" width="200">
 </p>
 
 # MPIpe: MRI Processing Pipeline for BIDS Conversion
@@ -413,6 +413,7 @@ automatically.  Missing events directories produce a `[SKIP]` warning.
 ```
 
 Review and edit these files before running Stage 4.  Common corrections:
+
 - Remove a run that was aborted mid-scan
 - Shift the starting run if training runs differ in count across subjects
 
